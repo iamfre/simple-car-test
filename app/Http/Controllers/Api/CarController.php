@@ -21,19 +21,27 @@ class CarController extends Controller
 
     public function getList(?Request $request): JsonResponse
     {
-        $data = $request->all();
-
-        // TODO: фильтр по году, бренду
+        // TODO: фильтр по году, цене
         $perPage = $request->has('per_page') && $request->per_page < self::LIMIT ?
             (int) $request->per_page : self::LIMIT;
 
-        $orderColumn = CarAvailableSortingColums::fromRequest($request->get('sort', 'brand_id'));
+        $orderColumn = CarAvailableSortingColums::fromRequest($request->get('sort')) ?? 'brand_id';
 
         $orderDirection = mb_strtolower($request->has('sort_by') ? $request->sort_by : 'asc');
 
         try {
-            $cars = Car::query()->with(['brand'])->orderBy($orderColumn, $orderDirection)->paginate($perPage);
+            $query = Car::query()->with(['brand']);
+
+            if ($request->has('brand')) {
+                $filterBrands = explode('-', $request->get('brand'));
+                $query->whereHas('brand', function ($q) use ($filterBrands) {
+                    $q->whereIn('name', $filterBrands);
+                });
+            }
+
+            $cars = $query->orderBy($orderColumn, $orderDirection)->paginate($perPage);
         } catch (\Exception $exception) {
+            // TODO: log
             return response()->json("Oops! Something went wrong", 400);
         }
 

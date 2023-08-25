@@ -19,7 +19,7 @@ enum CarAvailableSortingColums: string
             self::YEAR->value, self::UPDATED_AT->value];
     }
 
-    public static function fromRequest(string $status): ?string
+    public static function fromRequest($status): ?string
     {
         return match ($status) {
             'model' => self::MODEL->value,
