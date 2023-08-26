@@ -93,7 +93,7 @@ class CarController extends Controller
             $errors = [];
 
             $carService = new CarService();
-            $car = $carService->getCarById($carId);
+            $car = $carService->getCarById($carId, ['brand']);
 
             if (empty($car)) {
                 $errors[] = __('errors.not_found', ['attribute' => $carId]);
