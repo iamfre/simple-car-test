@@ -6,6 +6,7 @@ use App\Models\Car;
 
 class CarService
 {
+    /** Получить автомобиль по id или external_id */
     public function getCarById($carId, array $with = [])
     {
         $car = null;

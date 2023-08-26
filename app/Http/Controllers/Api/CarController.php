@@ -9,6 +9,7 @@ use App\Models\Car;
 use App\PropertyContainer\Transformers\CarCollection;
 use App\PropertyContainer\Transformers\CarResource;
 use App\Services\CarService;
+use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -43,7 +44,7 @@ class CarController extends Controller
                 $filterPrice = explode('-', $request->get('price'));
 
                 if (count($filterPrice) == 1) {
-                    $query->where('price', '<=', $filterPrice);;
+                    $query->where('price', '<=', $filterPrice);
                 } else {
                     $query->whereBetween('price', $filterPrice);
                 }
@@ -60,7 +61,7 @@ class CarController extends Controller
             }
 
             $cars = $query->orderBy($orderColumn, $orderDirection)->paginate($perPage);
-        } catch (\Exception $exception) {
+        } catch (Exception $exception) {
             Log::channel('api')->error(
                 sprintf(
                     'An error occurred while getting the list of cars, error code: %s',
@@ -104,7 +105,7 @@ class CarController extends Controller
                 'errors' => $errors,
                 'car' => !empty($car) ? new CarResource($car) : null,
             ];
-        } catch (\Exception $exception) {
+        } catch (Exception $exception) {
             Log::channel('api')->error(
                 sprintf(
                     'An error occurred while obtaining a vehicle by ID:%s, error code: %s',
@@ -166,7 +167,7 @@ class CarController extends Controller
                 ->exists();
 
             if ($carIsExist) {
-                $errors[] = __('validation.exist', ['attribute' => "{$brand->name}"."-"."{$data['model']}"]);
+                $errors[] = __('validation.exist', ['attribute' => "$brand->name"."-"."{$data['model']}"]);
             }
         }
 
