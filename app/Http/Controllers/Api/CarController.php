@@ -9,10 +9,11 @@ use App\Models\Car;
 use App\PropertyContainer\Transformers\CarCollection;
 use App\PropertyContainer\Transformers\CarResource;
 use App\Services\CarService;
+use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class CarController extends Controller
@@ -21,19 +22,58 @@ class CarController extends Controller
 
     public function getList(?Request $request): JsonResponse
     {
-        $data = $request->all();
-
-        // TODO: фильтр по году, бренду
         $perPage = $request->has('per_page') && $request->per_page < self::LIMIT ?
             (int) $request->per_page : self::LIMIT;
 
-        $orderColumn = CarAvailableSortingColums::fromRequest($request->get('sort', 'brand_id'));
+        $orderColumn = CarAvailableSortingColums::fromRequest($request->get('sort')) ?? 'brand_id';
 
         $orderDirection = mb_strtolower($request->has('sort_by') ? $request->sort_by : 'asc');
 
         try {
-            $cars = Car::query()->with(['brand'])->orderBy($orderColumn, $orderDirection)->paginate($perPage);
-        } catch (\Exception $exception) {
+            $query = Car::query()->with(['brand']);
+
+            if ($request->has('brand')) {
+                $filterBrands = explode('-', $request->get('brand'));
+
+                $query->whereHas('brand', function ($q) use ($filterBrands) {
+                    $q->whereIn('name', $filterBrands);
+                });
+            }
+
+            if ($request->has('price')) {
+                $filterPrice = explode('-', $request->get('price'));
+
+                if (count($filterPrice) == 1) {
+                    $query->where('price', '<=', $filterPrice);
+                } else {
+                    $query->whereBetween('price', $filterPrice);
+                }
+            }
+
+            if ($request->has('year')) {
+                $filterYear = explode('-', $request->get('year'));
+
+                if (count($filterYear) == 1) {
+                    $query->where('year', '<=', $filterYear);
+                } else {
+                    $query->whereBetween('year', $filterYear);
+                }
+            }
+
+            $cars = $query->orderBy($orderColumn, $orderDirection)->paginate($perPage);
+        } catch (Exception $exception) {
+            Log::channel('api')->error(
+                sprintf(
+                    'An error occurred while getting the list of cars, error code: %s',
+                    $exception->getCode()
+                ),
+                [
+                    'Exception class' => get_class($exception),
+                    'Message' => $exception->getMessage(),
+                    'File' => $exception->getFile(),
+                    'Line' => $exception->getLine(),
+                ]
+            );
             return response()->json("Oops! Something went wrong", 400);
         }
 
@@ -49,28 +89,49 @@ class CarController extends Controller
 
     public function show($carId): JsonResponse
     {
-        $responseStatus = 200;
-        $errors = [];
+        try {
+            $errors = [];
 
-        $car = $this->getCarById($carId);
+            $carService = new CarService();
+            $car = $carService->getCarById($carId, ['brand']);
 
-        if (empty($car)) {
-            $errors[] = __('errors.not_found', ['attribute' => $carId]);
+            if (empty($car)) {
+                $errors[] = __('errors.not_found', ['attribute' => $carId]);
+                $responseStatus = 404;
+            }
+
+            $responseData = [
+                'success' => empty($errors),
+                'errors' => $errors,
+                'car' => !empty($car) ? new CarResource($car) : null,
+            ];
+        } catch (Exception $exception) {
+            Log::channel('api')->error(
+                sprintf(
+                    'An error occurred while obtaining a vehicle by ID:%s, error code: %s',
+                    $carId,
+                    $exception->getCode()
+                ),
+                [
+                    'Exception class' => get_class($exception),
+                    'Message' => $exception->getMessage(),
+                    'File' => $exception->getFile(),
+                    'Line' => $exception->getLine(),
+                ]
+            );
+
+            return response()->json("Oops! Something went wrong", 400);
         }
 
-        if (!empty($errors)) {
-            $responseStatus = 400;
-        }
-
-        $responseData = [
-            'success' => empty($errors),
-            'errors' => $errors,
-            'car' => !empty($car) ? new CarResource($car) : null,
-        ];
-
-        return response()->json($responseData, $responseStatus);
+        return response()->json($responseData, $responseStatus ?? 200);
     }
 
+    /**
+     * Создание или обновление автомобиля
+     *
+     * @param  Request  $request
+     * @return JsonResponse
+     */
     public function update(Request $request): JsonResponse
     {
         $errors = [];
@@ -80,10 +141,15 @@ class CarController extends Controller
         $carId = Arr::get($data, 'id');
 
         $carService = new CarService();
+
         $currentCar = $carService->getCarById($carId, ['brand']);
 
         if (!empty($data['price']) && !is_numeric($data['price'])) {
             $errors[] = __('validation.numeric', ['attribute' => 'Price']);
+        }
+
+        if (!empty($data['sail_price']) && !is_numeric($data['sail_price'])) {
+            $errors[] = __('validation.numeric', ['attribute' => 'Sale-price']);
         }
 
         if (!empty($data['brand'])) {
@@ -106,20 +172,29 @@ class CarController extends Controller
                 ->exists();
 
             if ($carIsExist) {
-                $errors[] = __('validation.exist', ['attribute' => "{$brand->name}"."-"."{$data['model']}"]);
+                $errors[] = __('validation.exist', ['attribute' => "$brand->name"."-"."{$data['model']}"]);
             }
         }
 
         if (empty($errors)) {
             switch ($action) {
                 case 'update':
-                    if (!empty($request->get('year'))) {
-                        $data['year'] = Carbon::create($request->get('year'));
+                    if (!empty($data['price']) && !empty($data['sail_price'])) {
+                        $discount = round(($data['price'] - $data['sail_price']) / $data['price'] * 100, 2);
                     }
 
                     if (!empty($currentCar)) {
                         unset($data['external_id']);
-                        $car = $currentCar->update($data);
+
+                        if (!empty($discount)) {
+                            $currentCar->setInAdditional('discount', $discount, true);
+                        } else {
+                            $currentCar->deleteFromAdditional('discount');
+                        }
+
+                        $currentCar->update($data);
+
+                        $car = $currentCar;
                     } else {
                         if (empty($data['brand'])) {
                             $errors[] = __('validation.required', ['attribute' => 'Brand']);
@@ -131,7 +206,22 @@ class CarController extends Controller
 
                         if (empty($errors)) {
                             $data['external_id'] = Str::uuid()->toString();
+
                             $car = Car::query()->create($data);
+
+                            if (!empty($car) && !empty($discount)) {
+                                $car->setInAdditional('discount', $discount, true);
+                            }
+
+                            Log::channel('api')->info(
+                                sprintf(
+                                    'Creating car, id:%s',
+                                    $car->id,
+                                ),
+                                [
+                                    'Car' => $car->toArray(),
+                                ]
+                            );
                         }
                     }
 
@@ -143,7 +233,18 @@ class CarController extends Controller
 
                     if (empty($errors)) {
                         $car = $currentCar;
+
                         $currentCar->delete();
+
+                        Log::channel('api')->info(
+                            sprintf(
+                                'Deleting car, id:%s',
+                                $car->id,
+                            ),
+                            [
+                                'Car' => $car->toArray(),
+                            ]
+                        );
                     }
 
                     break;

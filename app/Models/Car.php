@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Modules\Core\Traits\HasAdditionalField;
 
 class Car extends Model
 {
     use HasFactory;
+    use HasAdditionalField;
 
     /**
      * The table associated with the model.
@@ -24,7 +26,7 @@ class Car extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'year' => 'datetime:d.m.Y H:i:s',
+        'additional' => 'array',
     ];
 
     public function brand()
