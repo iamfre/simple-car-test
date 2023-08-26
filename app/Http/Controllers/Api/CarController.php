@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class CarController extends Controller
@@ -61,7 +62,18 @@ class CarController extends Controller
 
             $cars = $query->orderBy($orderColumn, $orderDirection)->paginate($perPage);
         } catch (\Exception $exception) {
-            // TODO: log
+            Log::channel('api')->error(
+                sprintf(
+                    'An error occurred while getting the list of cars, error code: %s',
+                    $exception->getCode()
+                ),
+                [
+                    'Exception class' => get_class($exception),
+                    'Message' => $exception->getMessage(),
+                    'File' => $exception->getFile(),
+                    'Line' => $exception->getLine(),
+                ]
+            );
             return response()->json("Oops! Something went wrong", 400);
         }
 
