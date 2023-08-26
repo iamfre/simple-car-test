@@ -6,7 +6,7 @@ use App\Models\Car;
 
 class CarService
 {
-    public function getCarById($carId, array $with = null)
+    public function getCarById($carId, array $with = [])
     {
         $car = null;
 

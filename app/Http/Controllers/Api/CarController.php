@@ -89,26 +89,41 @@ class CarController extends Controller
 
     public function show($carId): JsonResponse
     {
-        $responseStatus = 200;
-        $errors = [];
+        try {
+            $errors = [];
 
-        $car = $this->getCarById($carId);
+            $carService = new CarService();
+            $car = $carService->getCarById($carId);
 
-        if (empty($car)) {
-            $errors[] = __('errors.not_found', ['attribute' => $carId]);
+            if (empty($car)) {
+                $errors[] = __('errors.not_found', ['attribute' => $carId]);
+                $responseStatus = 404;
+            }
+
+            $responseData = [
+                'success' => empty($errors),
+                'errors' => $errors,
+                'car' => !empty($car) ? new CarResource($car) : null,
+            ];
+        } catch (\Exception $exception) {
+            Log::channel('api')->error(
+                sprintf(
+                    'An error occurred while obtaining a vehicle by ID:%s, error code: %s',
+                    $carId,
+                    $exception->getCode()
+                ),
+                [
+                    'Exception class' => get_class($exception),
+                    'Message' => $exception->getMessage(),
+                    'File' => $exception->getFile(),
+                    'Line' => $exception->getLine(),
+                ]
+            );
+
+            return response()->json("Oops! Something went wrong", 400);
         }
 
-        if (!empty($errors)) {
-            $responseStatus = 400;
-        }
-
-        $responseData = [
-            'success' => empty($errors),
-            'errors' => $errors,
-            'car' => !empty($car) ? new CarResource($car) : null,
-        ];
-
-        return response()->json($responseData, $responseStatus);
+        return response()->json($responseData, $responseStatus ?? 200);
     }
 
     public function update(Request $request): JsonResponse
