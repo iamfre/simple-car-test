@@ -21,7 +21,6 @@ class CarController extends Controller
 
     public function getList(?Request $request): JsonResponse
     {
-        // TODO: фильтр по году, цене
         $perPage = $request->has('per_page') && $request->per_page < self::LIMIT ?
             (int) $request->per_page : self::LIMIT;
 
@@ -34,9 +33,30 @@ class CarController extends Controller
 
             if ($request->has('brand')) {
                 $filterBrands = explode('-', $request->get('brand'));
+
                 $query->whereHas('brand', function ($q) use ($filterBrands) {
                     $q->whereIn('name', $filterBrands);
                 });
+            }
+
+            if ($request->has('price')) {
+                $filterPrice = explode('-', $request->get('price'));
+
+                if (count($filterPrice) == 1) {
+                    $query->where('price', '<=', $filterPrice);;
+                } else {
+                    $query->whereBetween('price', $filterPrice);
+                }
+            }
+
+            if ($request->has('year')) {
+                $filterYear = explode('-', $request->get('year'));
+
+                if (count($filterYear) == 1) {
+                    $query->where('year', '<=', $filterYear);
+                } else {
+                    $query->whereBetween('year', $filterYear);
+                }
             }
 
             $cars = $query->orderBy($orderColumn, $orderDirection)->paginate($perPage);
@@ -121,10 +141,6 @@ class CarController extends Controller
         if (empty($errors)) {
             switch ($action) {
                 case 'update':
-                    if (!empty($request->get('year'))) {
-                        $data['year'] = Carbon::create($request->get('year'));
-                    }
-
                     if (!empty($currentCar)) {
                         unset($data['external_id']);
                         $car = $currentCar->update($data);

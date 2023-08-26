@@ -23,9 +23,7 @@ class Car extends Model
      */
     protected $guarded = ['id'];
 
-    protected $casts = [
-        'year' => 'datetime:d.m.Y H:i:s',
-    ];
+    protected $casts = [];
 
     public function brand()
     {

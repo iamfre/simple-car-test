@@ -19,7 +19,7 @@ class CreateCarsTable extends Migration
             $table->foreignId('brand_id')->constrained('brands');
             $table->unsignedDouble('price')->nullable();
             $table->unsignedDouble('sail_price')->nullable();
-            $table->dateTime('year')->index('by_year')->nullable();
+            $table->year('year')->index('by_year')->nullable();
             $table->timestamps();
 
             $table->index(['brand_id', 'model'], 'by_brand_id_model');
