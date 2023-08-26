@@ -12,7 +12,6 @@ use App\Services\CarService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -126,6 +125,12 @@ class CarController extends Controller
         return response()->json($responseData, $responseStatus ?? 200);
     }
 
+    /**
+     * Создание или обновление автомобиля
+     *
+     * @param  Request  $request
+     * @return JsonResponse
+     */
     public function update(Request $request): JsonResponse
     {
         $errors = [];
@@ -182,7 +187,18 @@ class CarController extends Controller
 
                         if (empty($errors)) {
                             $data['external_id'] = Str::uuid()->toString();
+
                             $car = Car::query()->create($data);
+
+                            Log::channel('api')->info(
+                                sprintf(
+                                    'Creating car, id:%s',
+                                    $car->id,
+                                ),
+                                [
+                                    'Car' => $car->toArray(),
+                                ]
+                            );
                         }
                     }
 
@@ -194,7 +210,18 @@ class CarController extends Controller
 
                     if (empty($errors)) {
                         $car = $currentCar;
+
                         $currentCar->delete();
+
+                        Log::channel('api')->info(
+                            sprintf(
+                                'Deleting car, id:%s',
+                                $car->id,
+                            ),
+                            [
+                                'Car' => $car->toArray(),
+                            ]
+                        );
                     }
 
                     break;
