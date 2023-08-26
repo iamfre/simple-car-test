@@ -141,10 +141,15 @@ class CarController extends Controller
         $carId = Arr::get($data, 'id');
 
         $carService = new CarService();
+
         $currentCar = $carService->getCarById($carId, ['brand']);
 
         if (!empty($data['price']) && !is_numeric($data['price'])) {
             $errors[] = __('validation.numeric', ['attribute' => 'Price']);
+        }
+
+        if (!empty($data['sail_price']) && !is_numeric($data['sail_price'])) {
+            $errors[] = __('validation.numeric', ['attribute' => 'Sale-price']);
         }
 
         if (!empty($data['brand'])) {
@@ -174,9 +179,22 @@ class CarController extends Controller
         if (empty($errors)) {
             switch ($action) {
                 case 'update':
+                    if (!empty($data['price']) && !empty($data['sail_price'])) {
+                        $discount = round(($data['price'] - $data['sail_price']) / $data['price'] * 100, 2);
+                    }
+
                     if (!empty($currentCar)) {
                         unset($data['external_id']);
-                        $car = $currentCar->update($data);
+
+                        if (!empty($discount)) {
+                            $currentCar->setInAdditional('discount', $discount, true);
+                        } else {
+                            $currentCar->deleteFromAdditional('discount');
+                        }
+
+                        $currentCar->update($data);
+
+                        $car = $currentCar;
                     } else {
                         if (empty($data['brand'])) {
                             $errors[] = __('validation.required', ['attribute' => 'Brand']);
@@ -190,6 +208,10 @@ class CarController extends Controller
                             $data['external_id'] = Str::uuid()->toString();
 
                             $car = Car::query()->create($data);
+
+                            if (!empty($car) && !empty($discount)) {
+                                $car->setInAdditional('discount', $discount, true);
+                            }
 
                             Log::channel('api')->info(
                                 sprintf(
