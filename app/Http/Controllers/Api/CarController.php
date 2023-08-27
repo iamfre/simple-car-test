@@ -128,7 +128,6 @@ class CarController extends Controller
 
     /**
      * Создание или обновление автомобиля
-     *
      * @param  Request  $request
      * @return JsonResponse
      */
@@ -142,7 +141,11 @@ class CarController extends Controller
 
         $carService = new CarService();
 
-        $currentCar = $carService->getCarById($carId, ['brand']);
+        $car = $carService->getCarById($carId, ['brand']);
+
+        if (!empty($carId) && empty($car)) {
+            $errors[] = __('errors.not_found', ['attribute' => $carId]);
+        }
 
         if (!empty($data['price']) && !is_numeric($data['price'])) {
             $errors[] = __('validation.numeric', ['attribute' => 'Price']);
@@ -179,23 +182,25 @@ class CarController extends Controller
         if (empty($errors)) {
             switch ($action) {
                 case 'update':
-                    if (!empty($data['price']) && !empty($data['sail_price'])) {
-                        $discount = round(($data['price'] - $data['sail_price']) / $data['price'] * 100, 2);
-                    }
-
-                    if (!empty($currentCar)) {
+                    if (!empty($car)) {
                         unset($data['external_id']);
 
-                        if (!empty($discount)) {
-                            $currentCar->setInAdditional('discount', $discount, true);
-                        } else {
-                            $currentCar->deleteFromAdditional('discount');
+                        $car->update($data);
+
+                        if (!empty($data['sail_price'] && !empty($car->price))) {
+                            $discount = round(($car->price - $data['sail_price']) / $car->price * 100, 2);
                         }
 
-                        $currentCar->update($data);
-
-                        $car = $currentCar;
+                        if (!empty($discount)) {
+                            $car->setInAdditional('discount', $discount, true);
+                        } elseif (empty($car->sail_price)) {
+                            $car->deleteFromAdditional('discount');
+                        }
                     } else {
+                        if (isset($data['sail_price']) && !empty($data['price'])) {
+                            $discount = round(($data['price'] - $data['sail_price']) / $data['price'] * 100, 2);
+                        }
+
                         if (empty($data['brand'])) {
                             $errors[] = __('validation.required', ['attribute' => 'Brand']);
                         }
@@ -227,14 +232,12 @@ class CarController extends Controller
 
                     break;
                 case 'delete':
-                    if (empty($currentCar)) {
+                    if (empty($car)) {
                         $errors[] = __('errors.not_found', ['attribute' => $carId]);
                     }
 
                     if (empty($errors)) {
-                        $car = $currentCar;
-
-                        $currentCar->delete();
+                        $car->delete();
 
                         Log::channel('api')->info(
                             sprintf(
