@@ -1,0 +1,22 @@
+GET {{host}}/api/cars
+Accept: application/json
+
+###
+
+GET {{host}}/api/cars
+Accept: application/json
+
+###
+
+POST {{host}}/api/cars
+Content-Type: application/x-www-form-urlencoded
+
+api_token={{token}}
+
+###
+
+POST {{host}}/api/cars
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer {{token}}
+
+###
